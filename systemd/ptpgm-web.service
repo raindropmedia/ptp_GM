@@ -1,0 +1,12 @@
+[Unit]
+Description=PTP grandmaster web UI
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/ptp-gm
+ExecStart=/usr/bin/python3 -m ptpgm serve
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

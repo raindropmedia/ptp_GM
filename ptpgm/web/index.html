@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PTP Grandmaster</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>PTP Grandmaster <small id="ver"></small></h1>
+  <div class="modes" id="modes">
+    <button data-mode="grandmaster">Grandmaster</button>
+    <button data-mode="measure">Messgerät</button>
+    <button data-mode="off">Aus</button>
+  </div>
+</header>
+<nav id="tabs">
+  <button data-tab="dash" class="active">Übersicht</button>
+  <button data-tab="gps">GPS</button>
+  <button data-tab="ptp">PTP</button>
+  <button data-tab="cfg">Konfiguration</button>
+  <button data-tab="log">Logs</button>
+</nav>
+<div id="msg" hidden></div>
+<main>
+  <section id="tab-dash">
+    <div class="cards" id="cards"></div>
+    <div class="panel">
+      <div class="bar">
+        <h2 id="chart-title">Offset</h2>
+        <span class="spacer"></span>
+        <label>Zeitfenster
+          <select id="win">
+            <option value="60">1 min</option><option value="600" selected>10 min</option>
+            <option value="3600">1 h</option><option value="21600">6 h</option>
+          </select></label>
+        <a class="btn" id="csv" href="/api/history.csv?seconds=600">CSV</a>
+        <button id="clear">Verlauf löschen</button>
+      </div>
+      <canvas id="chart" width="1000" height="260"></canvas>
+      <div class="legend"><span class="l1">Offset (ns)</span><span class="l2">Pfadverzögerung (ns)</span></div>
+      <table class="stats" id="stats"></table>
+    </div>
+    <div class="panel"><h2>Dienste</h2><div id="services" class="chips"></div></div>
+  </section>
+
+  <section id="tab-gps" hidden>
+    <div class="cards" id="gps-cards"></div>
+    <div class="panel"><h2>Satelliten</h2><div id="sats"></div></div>
+  </section>
+
+  <section id="tab-ptp" hidden>
+    <div class="panel"><h2>ptp4l (live)</h2><table class="kv" id="ptp-table"></table></div>
+    <div class="panel"><h2>Netzwerkkarten</h2><div id="ifaces"></div></div>
+  </section>
+
+  <section id="tab-cfg" hidden>
+    <form id="cfg-form"></form>
+    <div class="bar">
+      <button id="save">Speichern</button>
+      <button id="save-apply" class="primary">Speichern &amp; anwenden</button>
+    </div>
+    <div class="panel">
+      <h2>Passwort ändern</h2>
+      <div class="bar"><input type="password" id="newpw" placeholder="neues Passwort (min. 8 Zeichen)" autocomplete="new-password">
+      <button id="setpw">Ändern</button></div>
+    </div>
+  </section>
+
+  <section id="tab-log" hidden>
+    <div class="bar">
+      <select id="log-unit">
+        <option value="ts2phc">ts2phc</option><option value="ptp4l">ptp4l</option>
+        <option value="phc2sys">phc2sys</option><option value="gpsd">gpsd</option>
+        <option value="chrony">chrony</option><option value="web">Web-UI</option>
+      </select>
+      <button id="log-refresh">Aktualisieren</button>
+    </div>
+    <pre id="log"></pre>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

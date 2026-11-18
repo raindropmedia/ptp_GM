@@ -1,0 +1,12 @@
+[Unit]
+Description=PTP daemon (ptp4l) - grandmaster or measurement
+After=network.target ptpgm-ts2phc.service
+
+[Service]
+ExecStart=/usr/sbin/ptp4l -f /etc/ptp-gm/generated/ptp4l.conf
+ExecStartPost=/usr/bin/systemctl --no-block start ptpgm-gmflags.service
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=PHC to system clock (phc2sys)
+After=ptpgm-ptp4l.service
+Requires=ptpgm-ptp4l.service
+
+[Service]
+EnvironmentFile=/etc/ptp-gm/generated/phc2sys.env
+ExecStart=/usr/sbin/phc2sys $PHC2SYS_ARGS
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
