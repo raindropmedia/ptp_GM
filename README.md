@@ -80,8 +80,11 @@ Tests: `python3 -m unittest discover -s tests`
 
 ## Sicherheit
 
+- Status, Verlauf, CSV und Logs sind ohne Anmeldung lesbar. Das Passwort (HTTP Basic Auth)
+  braucht man nur für die Konfiguration: Konfiguration lesen/speichern, Modus wechseln,
+  Anwenden, Verlauf löschen, Passwort ändern.
 - Der Web-Dienst läuft als root (er startet Dienste und schreibt Konfiguration).
-  Er ist nur durch ein Passwort per HTTP Basic Auth geschützt, **ohne TLS**. Nur im
+  Der Schutz besteht nur aus dem Passwort, **ohne TLS**. Nur im
   vertrauenswürdigen Netz betreiben oder einen Reverse-Proxy mit TLS davorsetzen.
 - Schreibende Requests verlangen den Header `X-Requested-With` (CSRF-Schutz).
 - Alle Eingaben werden gegen feste Wertebereiche geprüft, bevor sie in Dateien landen.

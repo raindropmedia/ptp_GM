@@ -124,9 +124,10 @@ def make_handler(app):
 
         # -- routes
         def do_GET(self):
-            if not self._auth():
-                return
             u = urlparse(self.path)
+            # Status, history and logs are public; only the configuration needs the password.
+            if u.path == "/api/config" and not self._auth():
+                return
             q = parse_qs(u.query)
             if u.path in STATIC:
                 fn = STATIC[u.path]
