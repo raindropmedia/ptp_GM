@@ -3,83 +3,130 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PTP Grandmaster</title>
+<title>PTP-GM</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header>
-  <h1>PTP Grandmaster <small id="ver"></small></h1>
-  <div class="modes" id="modes">
-    <button data-mode="grandmaster">Grandmaster</button>
-    <button data-mode="measure">Messgerät</button>
-    <button data-mode="off">Aus</button>
+  <h1>PTP-GM <small id="host">–</small></h1>
+  <div class="clock">UTC <b id="clkUtc">--:--:--</b> · TAI <b id="clkTai">--:--:--</b></div>
+  <div class="pills">
+    <span class="pill"><span class="dot" id="pMode"></span><span id="pModeT">Betriebsart</span></span>
+    <span class="pill"><span class="dot" id="pGps"></span><span id="pGpsT">GPS</span></span>
+    <span class="pill"><span class="dot" id="pPps"></span><span id="pPpsT">PPS</span></span>
+    <span class="pill"><span class="dot" id="pChr"></span><span id="pChrT">chrony</span></span>
+    <span class="pill"><span class="dot" id="pPtp"></span><span id="pPtpT">ptp4l</span></span>
+    <span class="pill"><span class="dot" id="pConn"></span><span>Verbindung</span></span>
   </div>
 </header>
-<nav id="tabs">
-  <button data-tab="dash" class="active">Übersicht</button>
-  <button data-tab="gps">GPS</button>
+<nav id="nav">
+  <button data-tab="ov" class="active">Übersicht</button>
   <button data-tab="ptp">PTP</button>
-  <button data-tab="cfg">Konfiguration</button>
-  <button data-tab="log">Logs</button>
+  <button data-tab="gps">GPS</button>
+  <button data-tab="time">Zeit &amp; chrony</button>
+  <button data-tab="set">Einstellungen</button>
+  <button data-tab="log">Protokoll</button>
 </nav>
-<div id="msg" hidden></div>
 <main>
-  <section id="tab-dash">
-    <div class="cards" id="cards"></div>
-    <div class="panel">
-      <div class="bar">
-        <h2 id="chart-title">Offset</h2>
-        <span class="spacer"></span>
-        <label>Zeitfenster
-          <select id="win">
-            <option value="60">1 min</option><option value="600" selected>10 min</option>
-            <option value="3600">1 h</option><option value="21600">6 h</option>
-          </select></label>
-        <a class="btn" id="csv" href="/api/history.csv?seconds=600">CSV</a>
-        <button id="clear">Verlauf löschen</button>
+  <div class="warnbox" id="demoWarn">Demo-Modus: Es werden synthetische Daten angezeigt, am System wird nichts verändert.</div>
+  <section class="tab active" id="tab-ov">
+    <div class="grid">
+      <div class="card c12">
+        <h2>Betriebsart</h2>
+        <div class="modes">
+          <button class="mode" data-mode="grandmaster"><b>Sender · Grandmaster</b><span>Verteilt die per GPS/PPS geregelte Zeit der I210 per PTPv2 ins Netz (serverOnly).</span></button>
+          <button class="mode" data-mode="measure"><b>Empfänger · Messgerät</b><span>Hört auf den Netz-Grandmaster und misst Offset und Pfadlaufzeit, ohne die lokale Uhr zu verändern (clientOnly, free_running).</span></button>
+          <button class="mode" data-mode="off"><b>Aus</b><span>Keine PTP-Dienste von PTP-GM aktiv.</span></button>
+        </div>
+        <div class="confirm" id="confirm"><span id="confirmT"></span><button class="btn primary" id="confirmYes">Umschalten</button><button class="btn" id="confirmNo">Abbrechen</button></div>
       </div>
-      <canvas id="chart" width="1000" height="260"></canvas>
-      <div class="legend"><span class="l1">Offset (ns)</span><span class="l2">Pfadverzögerung (ns)</span></div>
-      <table class="stats" id="stats"></table>
-    </div>
-    <div class="panel"><h2>Dienste</h2><div id="services" class="chips"></div></div>
-  </section>
-
-  <section id="tab-gps" hidden>
-    <div class="cards" id="gps-cards"></div>
-    <div class="panel"><h2>Satelliten</h2><div id="sats"></div></div>
-  </section>
-
-  <section id="tab-ptp" hidden>
-    <div class="panel"><h2>ptp4l (live)</h2><table class="kv" id="ptp-table"></table></div>
-    <div class="panel"><h2>Netzwerkkarten</h2><div id="ifaces"></div></div>
-  </section>
-
-  <section id="tab-cfg" hidden>
-    <form id="cfg-form"></form>
-    <div class="bar">
-      <button id="save">Speichern</button>
-      <button id="save-apply" class="primary">Speichern &amp; anwenden</button>
-    </div>
-    <div class="panel">
-      <h2>Passwort ändern</h2>
-      <div class="bar"><input type="password" id="newpw" placeholder="neues Passwort (min. 8 Zeichen)" autocomplete="new-password">
-      <button id="setpw">Ändern</button></div>
+      <div class="card c12"><h2>Status</h2><div class="tiles" id="ovTiles"></div></div>
+      <div class="card c8"><h2 id="ovChartTitle">Verlauf</h2><canvas class="ch lg" id="cvOv"></canvas><div class="legend" id="ovLegend"></div></div>
+      <div class="card c4"><h2>Himmel <span class="r muted" id="ovSkyInfo"></span></h2><canvas class="sq" id="cvOvSky"></canvas></div>
+      <div class="card c12"><h2>Netzwerkkarten</h2><div style="overflow:auto"><table id="tNics"></table></div></div>
     </div>
   </section>
 
-  <section id="tab-log" hidden>
-    <div class="bar">
-      <select id="log-unit">
-        <option value="ts2phc">ts2phc</option><option value="ptp4l">ptp4l</option>
-        <option value="phc2sys">phc2sys</option><option value="gpsd">gpsd</option>
-        <option value="chrony">chrony</option><option value="web">Web-UI</option>
-      </select>
-      <button id="log-refresh">Aktualisieren</button>
+  <section class="tab" id="tab-ptp">
+    <div class="grid">
+      <div class="card c12"><h2>PTP-Kennwerte <span class="r muted" id="ptpInfo"></span></h2><div class="tiles" id="ptpTiles"></div></div>
+      <div class="card c8"><h2 id="offTitle">Offset</h2>
+        <div class="bar"><span class="spacer"></span>
+          <label class="muted">Zeitfenster <select id="win"><option value="60">1 min</option><option value="600" selected>10 min</option><option value="3600">1 h</option><option value="21600">6 h</option></select></label>
+          <a class="btn small" id="csv" href="/api/history.csv?seconds=600">CSV</a>
+          <button class="btn small" id="btnClear">Verlauf leeren</button></div>
+        <canvas class="ch lg" id="cvOff"></canvas></div>
+      <div class="card c4"><h2>Verteilung Offset</h2><canvas class="ch lg" id="cvHist"></canvas></div>
+      <div class="card c6"><h2>Mittlere Pfadlaufzeit</h2><canvas class="ch" id="cvDelay"></canvas></div>
+      <div class="card c6"><h2>Statistik</h2><table id="tStats"></table></div>
+      <div class="card c6"><h2>Grandmaster / Parent</h2><table class="kv" id="tParent"></table></div>
+      <div class="card c6"><h2>Time Properties</h2><table class="kv" id="tTime"></table></div>
+      <div class="card c4"><h2>Port</h2><table class="kv" id="tPort"></table></div>
+      <div class="card c4"><h2>Lokale Uhr (Default Data Set)</h2><table class="kv" id="tDefault"></table></div>
+      <div class="card c4"><h2>Current Data Set</h2><table class="kv" id="tCurrent"></table></div>
     </div>
-    <pre id="log"></pre>
+  </section>
+
+  <section class="tab" id="tab-gps">
+    <div class="grid">
+      <div class="card c12"><h2>GPS-Status</h2><div class="tiles" id="gpsTiles"></div></div>
+      <div class="card c4"><h2>Skyplot</h2><canvas class="sq" id="cvSky"></canvas>
+        <div class="legend"><span><i style="background:var(--green)"></i>in Lösung</span><span><i style="background:var(--grey)"></i>nur sichtbar</span></div></div>
+      <div class="card c8"><h2>Signalstärke (C/N₀)</h2><canvas class="ch lg" id="cvSnr"></canvas>
+        <div class="legend"><span><i style="background:var(--green)"></i>in Lösung</span><span><i style="background:var(--orange)"></i>nicht genutzt</span><span>Linien: 30 / 40 dB-Hz</span></div></div>
+      <div class="card c4"><h2>Position</h2><table class="kv" id="tPos"></table></div>
+      <div class="card c4"><h2>Genauigkeit &amp; DOP</h2><table class="kv" id="tDop"></table></div>
+      <div class="card c4"><h2>Empfänger / gpsd</h2><table class="kv" id="tDev"></table></div>
+      <div class="card c12"><h2>Satelliten</h2><div style="overflow:auto"><table id="tSats"></table></div></div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-time">
+    <div class="grid">
+      <div class="card c12"><h2>Zeitreferenz</h2><div class="tiles" id="timeTiles"></div></div>
+      <div class="card c12"><h2>PPS → PHC Offset (ts2phc)</h2><canvas class="ch" id="cvPps"></canvas></div>
+      <div class="card c6"><h2>chrony Tracking</h2><table class="kv" id="tTrack"></table></div>
+      <div class="card c6"><h2>chrony Quellen</h2><div style="overflow:auto"><table id="tSrc"></table></div>
+        <div class="note">* ausgewählt · + kombiniert · - nicht kombiniert · ? unerreichbar · x falsch · ~ zu variabel · # Refclock · ^ Server</div></div>
+      <div class="card c12"><h2>Dienste</h2><table class="kv" id="tSvc"></table></div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-set">
+    <div class="grid">
+      <div class="card c8">
+        <h2>Einstellungen <span class="r muted">Passwort erforderlich</span></h2>
+        <form id="fSet" autocomplete="off"></form>
+        <div class="bar">
+          <button class="btn primary" type="button" id="btnApply">Speichern &amp; anwenden</button>
+          <button class="btn" type="button" id="btnSave">Nur speichern</button>
+          <span class="muted" id="setMsg"></span>
+        </div>
+        <fieldset><legend>Passwort</legend>
+          <div class="bar"><input type="password" id="newpw" placeholder="neues Passwort (min. 8 Zeichen)" autocomplete="new-password">
+          <button class="btn" type="button" id="btnPw">Ändern</button></div></fieldset>
+      </div>
+      <div class="card c4">
+        <h2>Erzeugte Konfiguration</h2>
+        <div class="muted">ptp4l.conf</div><pre class="mono" id="prePtp"></pre>
+        <div class="muted">ts2phc.conf</div><pre class="mono" id="preTs"></pre>
+        <div class="muted">phc2sys</div><pre class="mono" id="prePhc"></pre>
+      </div>
+      <div class="card c12"><h2>Hardware-Prüfung <span class="r"><button class="btn small" id="btnCheck">Prüfen</button></span></h2>
+        <div id="checkOut" class="muted">Prüft Hardware-Zeitstempel, PHC, PPS-Eingang, GPS-Schnittstelle und installierte Programme.</div></div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-log">
+    <div class="grid">
+      <div class="card c12"><h2>Protokoll
+        <span class="r"><select id="logUnit"><option value="ts2phc">ts2phc</option><option value="ptp4l">ptp4l</option><option value="phc2sys">phc2sys</option><option value="gpsd">gpsd</option><option value="chrony">chrony</option><option value="web">Web-UI</option></select>
+        <button class="btn small" id="btnLog">Aktualisieren</button></span></h2>
+        <pre class="mono" id="rawLog" style="max-height:70vh"></pre></div>
+    </div>
   </section>
 </main>
+<div class="toast" id="toast"></div>
 <script src="/app.js"></script>
 </body>
 </html>

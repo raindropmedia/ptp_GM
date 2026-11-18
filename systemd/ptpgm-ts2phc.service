@@ -1,7 +1,7 @@
 [Unit]
 Description=GPS PPS to I210 PHC (ts2phc)
-After=gpsd.service network.target
-Wants=gpsd.service
+After=gpsd.service ptpgm-nmea.service network.target
+Wants=gpsd.service ptpgm-nmea.service
 PartOf=ptpgm-ptp4l.service
 
 [Service]

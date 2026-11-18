@@ -7,12 +7,13 @@ import io
 import json
 import os
 import secrets
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, config, status, system
+from . import __version__, config, render, status, system
 
 WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 STATIC = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css"}
@@ -36,6 +37,8 @@ def set_password(user, password):
 
 
 def check_auth(header):
+    if config.DEMO:
+        return True
     try:
         with open(config.AUTH_FILE) as f:
             rec = json.load(f)
@@ -56,7 +59,11 @@ class App:
     def __init__(self):
         self.cfg_lock = threading.Lock()
         self._cfg = config.load()
-        self.collector = status.Collector(lambda: self._cfg)
+        if config.DEMO:
+            from . import demo
+            self.collector = demo.DemoCollector(lambda: self._cfg)
+        else:
+            self.collector = status.Collector(lambda: self._cfg)
 
     @property
     def cfg(self):
@@ -75,6 +82,10 @@ class App:
             "version": __version__,
             "mode": cfg["mode"],
             "time": time.time(),
+            "now": time.time(),
+            "hostname": socket.gethostname(),
+            "demo": config.DEMO,
+            "utc_offset": cfg["ptp"]["utc_offset"],
             "nic": system.nic_info(iface),
             "pps_nic": system.nic_info(cfg["pps"]["interface"]),
         })
@@ -126,7 +137,7 @@ def make_handler(app):
         def do_GET(self):
             u = urlparse(self.path)
             # Status, history and logs are public; only the configuration needs the password.
-            if u.path == "/api/config" and not self._auth():
+            if u.path in ("/api/config", "/api/render") and not self._auth():
                 return
             q = parse_qs(u.query)
             if u.path in STATIC:
@@ -137,6 +148,16 @@ def make_handler(app):
                 return self._send(200, app.status())
             if u.path == "/api/config":
                 return self._send(200, app.cfg)
+            if u.path == "/api/presets":
+                return self._send(200, config.PRESETS)
+            if u.path == "/api/render":
+                cfg = app.cfg
+                return self._send(200, {
+                    "ptp4l": render.ptp4l_measure(cfg) if cfg["mode"] == "measure" else render.ptp4l_gm(cfg),
+                    "ts2phc": render.ts2phc(cfg), "gpsd": render.gpsd_default(cfg),
+                    "phc2sys": "phc2sys " + " ".join(render.phc2sys_args(cfg))})
+            if u.path == "/api/check":
+                return self._send(200, system.hardware_check(app.cfg))
             if u.path == "/api/interfaces":
                 out = system.list_interfaces()
                 for i in out:
@@ -209,7 +230,11 @@ def make_handler(app):
 def serve():
     app = App()
     app.collector.start()
-    cfg = app.cfg["web"]
+    cfg = dict(app.cfg["web"])
+    cfg["port"] = int(os.environ.get("PTPGM_PORT", cfg["port"]))
+    cfg["bind"] = os.environ.get("PTPGM_BIND", cfg["bind"])
     srv = ThreadingHTTPServer((cfg["bind"], cfg["port"]), make_handler(app))
+    if config.DEMO:
+        print("DEMO MODE: synthetic data, the system is not modified", flush=True)
     print(f"ptp-gm web UI on http://{cfg['bind']}:{cfg['port']}/", flush=True)
     srv.serve_forever()

@@ -1,0 +1,14 @@
+[Unit]
+Description=NMEA relay gpsd -> ts2phc
+After=gpsd.service
+Wants=gpsd.service
+PartOf=ptpgm-ptp4l.service
+
+[Service]
+WorkingDirectory=/opt/ptp-gm
+ExecStart=/usr/bin/python3 -m ptpgm nmea-relay
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

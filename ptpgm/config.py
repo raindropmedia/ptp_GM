@@ -9,10 +9,24 @@ import os
 import re
 import tempfile
 
-ETC = os.environ.get("PTPGM_ETC", "/etc/ptp-gm")
+DEMO = os.environ.get("PTPGM_DEMO") == "1"
+ETC = os.environ.get("PTPGM_ETC") or (
+    os.path.join(tempfile.gettempdir(), "ptpgm-demo") if DEMO else "/etc/ptp-gm")
 CONFIG_FILE = os.path.join(ETC, "config.json")
 AUTH_FILE = os.path.join(ETC, "web.json")
 GEN_DIR = os.path.join(ETC, "generated")
+
+# Profile templates. Applied to the grandmaster and measurement sections in the UI.
+PRESETS = {
+    "default": {"label": "IEEE 1588 Default-Profil (E2E)", "domain": 0, "transport": "UDPv4", "delay_mechanism": "E2E",
+                "log_announce_interval": 1, "log_sync_interval": 0, "log_min_delay_req_interval": 0, "announce_receipt_timeout": 3},
+    "aes67": {"label": "AES67 Media-Profil", "domain": 0, "transport": "UDPv4", "delay_mechanism": "E2E",
+              "log_announce_interval": 1, "log_sync_interval": -3, "log_min_delay_req_interval": -3, "announce_receipt_timeout": 3},
+    "smpte2059": {"label": "SMPTE ST 2059-2 (Broadcast)", "domain": 127, "transport": "UDPv4", "delay_mechanism": "E2E",
+                  "log_announce_interval": -2, "log_sync_interval": -3, "log_min_delay_req_interval": -3, "announce_receipt_timeout": 3},
+    "l2p2p": {"label": "Layer 2 / Peer-to-Peer", "domain": 0, "transport": "L2", "delay_mechanism": "P2P",
+              "log_announce_interval": 1, "log_sync_interval": 0, "log_min_delay_req_interval": 0, "announce_receipt_timeout": 3},
+}
 
 DEFAULTS = {
     "mode": "grandmaster",            # grandmaster | measure | off
@@ -22,13 +36,17 @@ DEFAULTS = {
     },
     "pps": {
         "interface": "eth1",          # NIC whose PHC receives the GPS PPS
-        "pin": 0,                     # SDP pin index on the I210 (SDP0..SDP3)
+        "pin": 1,                     # SDP pin index on the I210 (SDP0..SDP3); GPS PPS is on SDP1
         "channel": 0,                 # EXTTS channel (I210 has 0 and 1)
-        "polarity": "rising",         # rising | falling | both
+        "polarity": "both",           # the I210 always timestamps both edges -> "both"
+        "pulsewidth_ns": 100_000_000, # PPS pulse width (NEO-6M default: 100 ms)
         "correction_ns": 0,           # cable / antenna delay compensation
         "source": "nmea",             # nmea (time of second from gpsd) | generic
+        "nmea_delay_ms": 135,         # RMC arrival delay after the PPS edge (see nmea_relay.py)
     },
     "ptp": {
+        "preset": "default",          # key of PRESETS or "custom"
+        "announce_receipt_timeout": 3,
         "interface": "eth1",
         "domain": 0,
         "transport": "UDPv4",         # UDPv4 | UDPv6 | L2
@@ -36,7 +54,8 @@ DEFAULTS = {
         "time_stamping": "hardware",  # hardware | software
         "priority1": 128,
         "priority2": 128,
-        "clock_class": 6,             # 6 = locked to primary reference (GNSS)
+        "auto_clock_class": True,     # 6 locked / 7 holdover (<=30 min) / 248 no GPS
+        "clock_class": 6,             # used only when auto_clock_class is off
         "clock_accuracy": "0x21",     # 0x21 = within 100 ns
         "time_source": "0x20",        # 0x20 = GNSS
         "utc_offset": 37,
@@ -45,6 +64,7 @@ DEFAULTS = {
         "log_min_delay_req_interval": 0,
     },
     "measure": {
+        "announce_receipt_timeout": 3,
         "interface": "eth1",
         "domain": 0,
         "transport": "UDPv4",
@@ -53,9 +73,10 @@ DEFAULTS = {
         "free_running": True,         # never touch the PHC, only measure
     },
     "system": {
-        "phc2sys": True,              # PHC -> system clock (grandmaster mode)
-        "ntp_server": False,          # serve the system clock via chrony
-        "ntp_allow": "",              # e.g. "192.168.0.0/16"
+        "discipline": "chrony",       # who steers the system clock from the GPS-locked PHC:
+                                      #   chrony (refclock PHC, default) | phc2sys | none
+        "ntp_server": True,           # answer NTP clients (UDP 123) from the system clock
+        "ntp_allow": "",              # empty = subnet(s) of the PTP interface; or e.g. "192.168.0.0/16"
     },
     "web": {
         "bind": "0.0.0.0",
@@ -132,11 +153,15 @@ def validate(cfg):
         "pin": _int(p["pin"], "pps.pin", 0, 3),
         "channel": _int(p["channel"], "pps.channel", 0, 1),
         "polarity": _enum(p["polarity"], "pps.polarity", ["rising", "falling", "both"]),
+        "pulsewidth_ns": _int(p["pulsewidth_ns"], "pps.pulsewidth_ns", 1_000_000, 990_000_000),
         "correction_ns": _int(p["correction_ns"], "pps.correction_ns", -1_000_000, 1_000_000),
         "source": _enum(p["source"], "pps.source", ["nmea", "generic"]),
+        "nmea_delay_ms": _int(p["nmea_delay_ms"], "pps.nmea_delay_ms", 0, 900),
     }
     t = d["ptp"]
     out["ptp"] = {
+        "preset": t["preset"] if t["preset"] in PRESETS else "custom",
+        "announce_receipt_timeout": _int(t["announce_receipt_timeout"], "ptp.announce_receipt_timeout", 2, 10),
         "interface": _iface(t["interface"], "ptp.interface"),
         "domain": _int(t["domain"], "ptp.domain", 0, 127),
         "transport": _enum(t["transport"], "ptp.transport", ["UDPv4", "UDPv6", "L2"]),
@@ -144,6 +169,7 @@ def validate(cfg):
         "time_stamping": _enum(t["time_stamping"], "ptp.time_stamping", ["hardware", "software"]),
         "priority1": _int(t["priority1"], "ptp.priority1", 0, 255),
         "priority2": _int(t["priority2"], "ptp.priority2", 0, 255),
+        "auto_clock_class": _bool(t["auto_clock_class"], "ptp.auto_clock_class"),
         "clock_class": _int(t["clock_class"], "ptp.clock_class", 0, 255),
         "clock_accuracy": _hex8(t["clock_accuracy"], "ptp.clock_accuracy"),
         "time_source": _hex8(t["time_source"], "ptp.time_source"),
@@ -154,6 +180,7 @@ def validate(cfg):
     }
     m = d["measure"]
     out["measure"] = {
+        "announce_receipt_timeout": _int(m["announce_receipt_timeout"], "measure.announce_receipt_timeout", 2, 10),
         "interface": _iface(m["interface"], "measure.interface"),
         "domain": _int(m["domain"], "measure.domain", 0, 127),
         "transport": _enum(m["transport"], "measure.transport", ["UDPv4", "UDPv6", "L2"]),
@@ -163,7 +190,7 @@ def validate(cfg):
     }
     s = d["system"]
     out["system"] = {
-        "phc2sys": _bool(s["phc2sys"], "system.phc2sys"),
+        "discipline": _enum(s["discipline"], "system.discipline", ["chrony", "phc2sys", "none"]),
         "ntp_server": _bool(s["ntp_server"], "system.ntp_server"),
         "ntp_allow": _cidr(s["ntp_allow"], "system.ntp_allow"),
     }

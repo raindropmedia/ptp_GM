@@ -25,6 +25,7 @@ install -d "$OPT" "$ETC" "$ETC/generated"
 rm -rf "$OPT/ptpgm"
 cp -r "$SRC/ptpgm" "$OPT/ptpgm"
 find "$OPT/ptpgm" -name __pycache__ -prune -exec rm -rf {} +
+rm -f /etc/systemd/system/ptpgm-gmflags.service   # replaced by the web service
 cp "$SRC"/systemd/*.service /etc/systemd/system/
 systemctl daemon-reload
 
@@ -58,7 +59,8 @@ if [ "$BOOT_CONFIG" -eq 1 ]; then
 fi
 
 echo "== services"
-systemctl enable --now ptpgm-web.service
+systemctl enable ptpgm-web.service
+systemctl restart ptpgm-web.service   # also picks up an updated version
 systemctl disable --now systemd-timesyncd.service 2>/dev/null || true
 
 IP="$(hostname -I | awk '{print $1}')"
