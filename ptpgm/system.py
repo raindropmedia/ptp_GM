@@ -3,6 +3,7 @@ import json
 import os
 import re
 import subprocess
+import time
 
 from . import config, render
 
@@ -115,6 +116,58 @@ def write_chrony(cfg, phc_enabled):
     return True
 
 
+RTC_BEGIN = "# >>> ptp-gm rtc (managed) >>>"
+RTC_END = "# <<< ptp-gm rtc (managed) <<<"
+# CM4 IO board: PCF85063A on the i2c bus shared with CSI/DSI (see Raspberry Pi docs)
+RTC_LINES = ["dtparam=i2c_vc=on", "dtoverlay=i2c-rtc,pcf85063a,i2c_csi_dsi"]
+
+
+def boot_config_path():
+    for p in ("/boot/firmware/config.txt", "/boot/config.txt"):
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def rtc_setup(enabled):
+    """Idempotently add/remove the RTC overlay block in config.txt. Returns a log line or None."""
+    path = boot_config_path()
+    if not path:
+        return "RTC: config.txt nicht gefunden"
+    with open(path) as f:
+        text = f.read()
+    block = re.compile(r"\n?" + re.escape(RTC_BEGIN) + r".*?" + re.escape(RTC_END) + r"\n?", re.S)
+    has = bool(block.search(text))
+    if enabled == has:
+        return None
+    if not os.path.exists(path + ".ptpgm.bak"):
+        with open(path + ".ptpgm.bak", "w") as f:
+            f.write(text)
+    if enabled:
+        text = text.rstrip("\n") + "\n" + RTC_BEGIN + "\n" + "\n".join(RTC_LINES) + "\n" + RTC_END + "\n"
+    else:
+        text = block.sub("\n", text)
+    config.atomic_write(path, text)
+    return ("RTC aktiviert" if enabled else "RTC deaktiviert") + " in " + path + " - Neustart erforderlich"
+
+
+def rtc_info():
+    """State of the kernel RTC device."""
+    info = {"present": os.path.exists("/dev/rtc0")}
+    if info["present"]:
+        try:
+            with open("/sys/class/rtc/rtc0/name") as f:
+                info["name"] = f.read().strip()
+        except OSError:
+            pass
+        try:  # sysfs works without hwclock (moved to util-linux-extra in Debian 13)
+            with open("/sys/class/rtc/rtc0/since_epoch") as f:
+                info["time"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(int(f.read())))
+        except (OSError, ValueError):
+            pass
+    return info
+
+
 def write_system_files(cfg):
     """Files outside /etc/ptp-gm. Only written when the target dir exists."""
     if os.path.isdir(os.path.dirname(GPSD_DEFAULT)):
@@ -132,6 +185,9 @@ def apply(cfg):
     if DEMO:
         return ["Demo-Modus: Konfiguration erzeugt, am System wurde nichts verändert"]
     write_system_files(cfg)
+    msg = rtc_setup(cfg["system"]["rtc"])
+    if msg:
+        log.append(msg)
     want = wanted_units(cfg)
     if want:
         for u in CONFLICT_UNITS:
@@ -295,6 +351,11 @@ def hardware_check(cfg):
             "im Messgerät-Modus muss ptp4l auf der Karte laufen, deren PHC per GPS-PPS geführt wird")
     dev = cfg["gps"]["device"]
     add(f"GPS-Schnittstelle {dev}", os.path.exists(dev), "vorhanden" if os.path.exists(dev) else "fehlt (UART aktiviert? Neustart?)")
+    if cfg["system"]["rtc"]:
+        r = rtc_info()
+        add("RTC (/dev/rtc0)", r["present"],
+            f"{r.get('name', '')} {r.get('time', '')}".strip() if r["present"]
+            else "nicht vorhanden (Neustart nach Aktivierung nötig? Batterie/Board?)")
     for tool in ("ptp4l", "ts2phc", "phc2sys", "pmc", "gpsd", "chronyd"):
         rc, out, err = run([tool, "--version"] if tool != "gpsd" else ["gpsd", "-V"])
         txt = (out or err).strip().splitlines()

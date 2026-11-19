@@ -128,6 +128,12 @@ Grandmaster und Messgerät und lassen sich danach einzeln ändern (die Vorlage s
   damit die Systemzeit. Der Pi meldet sich dann per NTP als Stratum 1. Zusätzlich steht die
   NMEA-Zeit von `gpsd` als `refclock SHM 0 refid NMEA noselect` in der Quellentabelle, nur zum
   Vergleich (±100 ms, steuert nichts). Alternativen: `phc2sys` oder `none`.
+- **Board-RTC (optional):** Der CM4 hat selbst keine RTC; auf dem CM4-IO-Board sitzt eine PCF85063A mit Batterie.
+  „Board-RTC“ (Einstellungen → System, oder `sudo ./install.sh --rtc`) trägt `dtparam=i2c_vc=on` und
+  `dtoverlay=i2c-rtc,pcf85063a,i2c_csi_dsi` in einen markierten Block der `config.txt` ein (Backup `*.ptpgm.bak`);
+  nach einem Neustart erscheint `/dev/rtc0`. chrony (`rtcsync`) schreibt die GPS-geführte Zeit alle ~11 Minuten
+  zurück. Die RTC verbessert die Genauigkeit **nicht**; sie gibt dem System nur beim Start ohne GPS-Fix eine
+  ungefähre Zeit. Die Hardware-Prüfung zeigt `/dev/rtc0` samt Uhrzeit.
 - **NTP-Server:** Mit „NTP-Server“ (Standard an) beantwortet chrony NTP-Anfragen der PCs im Netz (UDP 123) aus der
   Systemzeit. Erlaubt ist das Subnetz der PTP-Karte (`eth1`) oder der Bereich aus „NTP erlaubt für“. Ohne
   `allow` antwortet chrony niemandem. Test von einem PC: `ntpdate -q <IP>` oder `chronyc -h <IP> tracking`.
@@ -326,6 +332,12 @@ then switches to "Custom").
   clock with it. The Pi then announces itself via NTP as stratum 1. In addition, the NMEA time
   from `gpsd` appears as `refclock SHM 0 refid NMEA noselect` in the sources table, for
   comparison only (±100 ms, steers nothing). Alternatives: `phc2sys` or `none`.
+- **Board RTC (optional):** The CM4 has no RTC itself; the CM4 IO board carries a battery-backed PCF85063A.
+  "Board RTC" (Settings → System, or `sudo ./install.sh --rtc`) adds `dtparam=i2c_vc=on` and
+  `dtoverlay=i2c-rtc,pcf85063a,i2c_csi_dsi` in a marked block of `config.txt` (backup `*.ptpgm.bak`);
+  `/dev/rtc0` appears after a reboot. chrony (`rtcsync`) writes the GPS-disciplined time back about every
+  11 minutes. The RTC does **not** improve accuracy; it only gives the system an approximate time at boot
+  without a GPS fix. The hardware check shows `/dev/rtc0` and its time.
 - **NTP server:** With "NTP server" enabled (default), chrony answers NTP requests from the
   PCs on the network (UDP 123) from the system clock. The subnet of the PTP NIC (`eth1`) or
   the range from "NTP allowed for" is permitted. Without `allow`, chrony answers nobody.

@@ -77,6 +77,8 @@ DEFAULTS = {
                                       #   chrony (refclock PHC, default) | phc2sys | none
         "ntp_server": True,           # answer NTP clients (UDP 123) from the system clock
         "ntp_allow": "",              # empty = subnet(s) of the PTP interface; or e.g. "192.168.0.0/16"
+        "rtc": False,                 # battery-backed board RTC (CM4 IO board, PCF85063A): enable overlay,
+                                      # chrony `rtcsync` writes the GPS-disciplined time back to it
     },
     "web": {
         "bind": "0.0.0.0",
@@ -193,6 +195,7 @@ def validate(cfg):
         "discipline": _enum(s["discipline"], "system.discipline", ["chrony", "phc2sys", "none"]),
         "ntp_server": _bool(s["ntp_server"], "system.ntp_server"),
         "ntp_allow": _cidr(s["ntp_allow"], "system.ntp_allow"),
+        "rtc": _bool(s["rtc"], "system.rtc"),
     }
     w = d["web"]
     out["web"] = {

@@ -226,7 +226,7 @@ const SCHEMA = [
     ["log_announce_interval", "logAnnounceInterval", "num"], ["log_sync_interval", "logSyncInterval", "num"], ["log_min_delay_req_interval", "logMinDelayReqInterval", "num"], ["announce_receipt_timeout", "announceReceiptTimeout", "num"]]],
   ["Messgerät (Empfänger)", "measure", [["interface", "Netzwerkkarte", "text"], ["domain", "Domain", "num"], ["transport", "Transport", "enum", ["UDPv4", "UDPv6", "L2"]], ["delay_mechanism", "Delay-Mechanismus", "enum", ["E2E", "P2P"]],
     ["time_stamping", "Zeitstempel", "enum", ["hardware", "software"]], ["announce_receipt_timeout", "announceReceiptTimeout", "num"], ["free_running", "Lokale Uhr nicht nachführen", "bool"]]],
-  ["System", "system", [["discipline", "Systemzeit-Regler", "enum", ["chrony", "phc2sys", "none"], "chrony: PHC der I210 als Refclock (GPS); phc2sys: wie bisher; none: Systemzeit unverändert"], ["ntp_server", "NTP-Server (chrony)", "bool"], ["ntp_allow", "NTP erlaubt für", "text", 0, "leer = Subnetz der PTP-Karte, sonst z. B. 192.168.0.0/16"]]],
+  ["System", "system", [["discipline", "Systemzeit-Regler", "enum", ["chrony", "phc2sys", "none"], "chrony: PHC der I210 als Refclock (GPS); phc2sys: wie bisher; none: Systemzeit unverändert"], ["ntp_server", "NTP-Server (chrony)", "bool"], ["ntp_allow", "NTP erlaubt für", "text", 0, "leer = Subnetz der PTP-Karte, sonst z. B. 192.168.0.0/16"], ["rtc", "Board-RTC (CM4 IO, Batterie)", "bool", 0, "liefert beim Start eine ungefähre Zeit ohne GPS-Fix; chrony schreibt die GPS-Zeit zurück. Neustart nötig"]]],
   ["Web-UI (Neustart nötig)", "web", [["bind", "Adresse", "text"], ["port", "Port", "num"]]],
 ];
 let PRESETS = {};

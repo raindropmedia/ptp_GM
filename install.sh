@@ -3,10 +3,12 @@
 set -euo pipefail
 
 BOOT_CONFIG=1
+RTC=0
 for a in "$@"; do
   case "$a" in
     --no-boot-config) BOOT_CONFIG=0 ;;
-    -h|--help) echo "usage: sudo ./install.sh [--no-boot-config]"; exit 0 ;;
+    --rtc) RTC=1 ;;
+    -h|--help) echo "usage: sudo ./install.sh [--no-boot-config] [--rtc]"; exit 0 ;;
   esac
 done
 [ "$(id -u)" -eq 0 ] || { echo "run as root: sudo $0" >&2; exit 1; }
@@ -19,6 +21,8 @@ echo "== packages"
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
   linuxptp gpsd gpsd-clients chrony pps-tools ethtool python3 tzdata
+# hwclock moved to util-linux-extra in Debian 13 (optional, only for manual RTC checks)
+apt-get install -y util-linux-extra 2>/dev/null || true
 
 echo "== files"
 install -d "$OPT" "$ETC" "$ETC/generated"
@@ -42,6 +46,13 @@ fi
 from ptpgm import config
 config.save({})
 PY
+if [ "$RTC" -eq 1 ]; then
+  python3 - <<'PYRTC'
+from ptpgm import config, system
+c = config.load(); c["system"]["rtc"] = True; config.save(c)
+print(" ", system.rtc_setup(True) or "RTC bereits aktiviert")
+PYRTC
+fi
 chmod 750 "$ETC"
 
 if [ "$BOOT_CONFIG" -eq 1 ]; then

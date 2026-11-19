@@ -115,3 +115,25 @@ class T7(unittest.TestCase):
         off = config.validate({"system": {"ntp_server": False, "ntp_allow": "192.168.0.0/16"}})
         self.assertNotIn("allow", render.chrony_snippet(off, 1, True, ["10.50.28.0/24"]))
         self.assertNotIn("allow", render.chrony_snippet(on, 1, True, []))  # no subnet -> no server
+
+
+class T3(unittest.TestCase):
+    def test_rtc_block_roundtrip(self):
+        import tempfile
+        from ptpgm import system
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "config.txt")
+            orig = "enable_uart=1\ndtoverlay=disable-bt\n"
+            open(p, "w").write(orig)
+            system.boot_config_path = lambda: p
+            self.assertIn("aktiviert", system.rtc_setup(True))
+            self.assertIn("i2c-rtc,pcf85063a", open(p).read())
+            self.assertIsNone(system.rtc_setup(True))      # idempotent
+            self.assertIn("deaktiviert", system.rtc_setup(False))
+            self.assertEqual(open(p).read().strip(), orig.strip())
+            self.assertEqual(open(p + ".ptpgm.bak").read(), orig)
+
+    def test_rtc_default_off_and_validated(self):
+        self.assertFalse(config.validate({})["system"]["rtc"])
+        with self.assertRaises(config.ValidationError):
+            config.validate({"system": {"rtc": "yes"}})
